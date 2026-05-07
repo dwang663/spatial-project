@@ -45,8 +45,8 @@
     let suzanne_pos = [0, 0, 0];
 
     window.addEventListener("mousemove", (event) => {
-        mouse_x = (event.clientX / window.innerWidth)*2 - 1;
-        mouse_y = -(event.clientY / window.innerHeight)*2 + 1;
+        mouse_x = (event.clientX/window.innerWidth)*2 - 1;
+        mouse_y = -(event.clientY/window.innerHeight)*2 + 1;
     });
 
     function multiply_3x3(A, B) {
@@ -69,22 +69,22 @@
         let sin_x = Math.sin(theta_x);
         let cos_y = Math.cos(theta_y);
         let sin_y = Math.sin(theta_y);
-        let Ry = [
+        let Rx = [
             [cos_x, 0, sin_x],
-            [  0, 1,  0],
+            [0, 1, 0],
             [-sin_x, 0, cos_x]
         ];
-        let Rz = [
+        let Ry = [
             [cos_y, -sin_y, 0],
-            [sin_y,  cos_y, 0],
-            [ 0,   0, 1]
+            [sin_y, cos_y, 0],
+            [0, 0, 1]
         ];
-        let R = multiply_3x3(Ry, Rz);
+        let R = multiply_3x3(Rx, Ry);
         return [
             [R[0][0], R[0][1], R[0][2], t_x],
             [R[1][0], R[1][1], R[1][2], t_y],
             [R[2][0], R[2][1], R[2][2], t_z],
-            [0,       0,       0,       1]
+            [0, 0, 0, 1]
         ];
     }
 
@@ -99,15 +99,15 @@
     engine.animation_loop(() => {
         let x_rotation_sensitivity = 0.4;
         let y_rotation_sensitivity = 0.3;
+
         let max_theta_x = Math.PI * x_rotation_sensitivity;
         let max_theta_y = Math.PI * y_rotation_sensitivity;
+        
         let theta_x = -mouse_y * max_theta_x;
         let theta_y = mouse_x * max_theta_y;
-
-        let target_pos = [0,mouse_x,mouse_y];
+        let target_pos = [0, mouse_x, mouse_y];
 
         let speed = 0.03;
-
         suzanne_pos[0] += speed * (target_pos[0]-suzanne_pos[0]);
         suzanne_pos[1] += speed * (target_pos[1]-suzanne_pos[1]);
         suzanne_pos[2] += speed * (target_pos[2]-suzanne_pos[2]);
