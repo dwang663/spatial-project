@@ -96,6 +96,136 @@
         ];
     }
 
+    // DISPLACEMENT-BASED DISTANCE HELPERS
+    function matrix_inverse_3x3(A) {
+        let det = A[0][0] * (A[1][1] * A[2][2] - A[2][1] * A[1][2]) -
+            A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+            A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+
+        if (det === 0) {
+            return null; // No inverse exists if determinant is 0
+        }
+
+        let cofactors = [
+            [
+                (A[1][1] * A[2][2] - A[2][1] * A[1][2]),
+                -(A[1][0] * A[2][2] - A[1][2] * A[2][0]),
+                (A[1][0] * A[2][1] - A[2][0] * A[1][1])
+            ],
+            [
+                -(A[0][1] * A[2][2] - A[0][2] * A[2][1]),
+                (A[0][0] * A[2][2] - A[0][2] * A[2][0]),
+                -(A[0][0] * A[2][1] - A[2][0] * A[0][1])
+            ],
+            [
+                (A[0][1] * A[1][2] - A[0][2] * A[1][1]),
+                -(A[0][0] * A[1][2] - A[1][0] * A[0][2]),
+                (A[0][0] * A[1][1] - A[1][0] * A[0][1])
+            ]
+        ];
+
+        let adjugate = [
+            [cofactors[0][0] / det, cofactors[1][0] / det, cofactors[2][0] / det],
+            [cofactors[0][1] / det, cofactors[1][1] / det, cofactors[2][1] / det],
+            [cofactors[0][2] / det, cofactors[1][2] / det, cofactors[2][2] / det]
+        ];
+
+        return adjugate;
+
+    }
+
+    function full_se3matrix(r_x, r_y, r_z, t_x, t_y, t_z){
+        return [[Math.cos(r_y)*Math.cos(r_z), -Math.cos(r_x)*Math.sin(r_z), Math.sin(r_x)*Math.sin(r_y), t_x],
+                [Math.cos(r_z)*Math.sin(r_x)*Math.sin(r_y) + Math.cos(r_x)*Math.sin(r_z), Math.cos(r_x)*Math.cos(r_z) - Math.sin(r_x)*Math.sin(r_y)*Math.sin(r_z), -Math.cos(r_y)*Math.sin(r_x), t_y],
+                [-Math.cos(r_x)*Math.cos(r_z)*Math.sin(r_y) + Math.sin(r_x)*Math.sin(r_z), Math.cos(r_z)*Math.sin(r_x) + Math.cos(r_x)*Math.sin(r_y)*Math.sin(r_z), Math.cos(r_x)*Math.cos(r_y), t_z],
+                [0, 0, 0, 1]];
+    }
+    function se3inverse(M){
+        let R = [[M[0][0], M[0][1], M[0][2]],
+                 [M[1][0], M[1][1], M[1][2]],
+                 [M[2][0], M[2][1], M[2][2]]];
+        let T = [[M[0][3]], [M[1][3]], [M[2][3]]];
+        let R_t = math.transpose(R);
+        let R_t_t = math.multiply(-1, math.multiply(R_t, T));
+        let M_inv = [[R_t[0][0], R_t[0][1], R_t[0][2], R_t_t[0][0]],
+                 [R_t[1][0], R_t[1][1], R_t[1][2], R_t_t[1][0]],
+                 [R_t[2][0], R_t[2][1], R_t[2][2], R_t_t[2][0]],
+                 [0, 0, 0, 1]];
+        return M_inv;
+    }
+    function so3logarithm(R){
+        let trace = R[0][0] + R[1][1] + R[2][2];
+        let beta = Math.acos((trace - 1) / 2);
+        let coeff;
+        if(Math.abs(beta) < 1e-6){
+            coeff = 0.5+beta**2/12+7*beta**4/720;
+            return math.multiply(coeff, (math.subtract(R, math.transpose(R))));
+        }
+        else if(Math.abs(beta - Math.PI) < 1e-6){
+            return [
+                [0, -Math.PI*Math.sqrt(0.5*(R[2][2]+1)), Math.PI*Math.sqrt(0.5*(R[1][1]+1))],
+                [Math.PI*Math.sqrt(0.5*(R[2][2]+1)), 0, -Math.PI*Math.sqrt(0.5*(R[0][0]+1))],
+                [-Math.PI*Math.sqrt(0.5*(R[1][1]+1)), Math.PI*Math.sqrt(0.5*(R[0][0]+1)), 0]
+            ];
+        }
+        else{
+            coeff = beta/(2*Math.sin(beta));
+            return math.multiply(coeff, (math.subtract(R, math.transpose(R))));
+        }
+    }
+    function fullse3logarithm(M){
+        let R = [[M[0][0], M[0][1], M[0][2]],
+                 [M[1][0], M[1][1], M[1][2]],
+                 [M[2][0], M[2][1], M[2][2]]];
+        let T = [[M[0][3]], [M[1][3]], [M[2][3]]];
+        let A = so3logarithm(R);
+        let I = [[1,0,0],[0,1,0],[0,0,1]];
+        let u = [-A[1][2], A[0][2], -A[0][1]];
+        let beta = math.norm(u);
+        let p, q;
+        if(Math.abs(beta) < 1e-6){
+            p = 0.5-beta**2/24+beta**4/720;
+            q = 1/6-beta**2/120+beta**4/5040;
+        }
+        else{
+            p = (1 - Math.cos(beta)) / (beta**2);
+            q = (beta - Math.sin(beta)) / (beta**3);
+        }
+        let C = math.add(I, math.multiply(p, A), math.multiply(q, math.multiply(A, A)));
+        let v = math.multiply(matrix_inverse_3x3(C), T);
+        return [[A[0][0], A[0][1], A[0][2], v[0][0]],
+                [A[1][0], A[1][1], A[1][2], v[1][0]],
+                [A[2][0], A[2][1], A[2][2], v[2][0]],
+                [0, 0, 0, 0]];
+    }
+    function vee_se3(M){
+        return [
+            M[2][1],
+            M[0][2],
+            M[1][0],
+            M[0][3],
+            M[1][3],
+            M[2][3]
+        ];
+    }
+    function dispdist(r_x1, r_y1, r_z1, t_x1, t_y1, t_z1, r_x2, r_y2, r_z2, t_x2, t_y2, t_z2){
+        let inv1 = se3inverse(full_se3matrix(r_x1, r_y1, r_z1, t_x1, t_y1, t_z1));
+        let disp = math.multiply(inv1, full_se3matrix(r_x2, r_y2, r_z2, t_x2, t_y2, t_z2));
+        let ln = vee_se3(fullse3logarithm(disp));
+        return math.norm(ln);
+    }
+
+    let max_red_disp = 2*dispdist(0, 0, 0, 0, 0, 0, 0, -Math.PI*0.3, 0, -5, 0, 0);
+    let max_green_disp = 2*dispdist(0, 0, 0, 0, 0, 0, -Math.PI*0.4, 0, 0, 0, 5, 0);
+    let max_blue_disp = 2*dispdist(0, 0, 0, 0, 0, 0, -Math.PI*0.4, -Math.PI*0.3, 0, -5, 5, 0);
+
+    function calculate_RGB(theta_x, theta_y, suzanne_pos, max_theta_x, max_theta_y){
+        let red = dispdist(theta_x, theta_y, 0, suzanne_pos[0], suzanne_pos[1], suzanne_pos[2], 0, -max_theta_y, 0, -2, 0, 0);
+        let green = dispdist(theta_x, theta_y, 0, suzanne_pos[0], suzanne_pos[1], suzanne_pos[2], -max_theta_x, 0, 0, 0, 2, 0);
+        let blue = dispdist(theta_x, theta_y, 0, suzanne_pos[0], suzanne_pos[1], suzanne_pos[2], 0, 0, 0, 0, 0, 0);
+        return [red, green, blue];
+    }
+
     engine.animation_loop(() => {
         let x_rotation_sensitivity = 0.4;
         let y_rotation_sensitivity = 0.3;
@@ -111,8 +241,15 @@
         suzanne_pos[0] += speed * (target_pos[0]-suzanne_pos[0]);
         suzanne_pos[1] += speed * (target_pos[1]-suzanne_pos[1]);
         suzanne_pos[2] += speed * (target_pos[2]-suzanne_pos[2]);
+        
+        let [r, g, b] = calculate_RGB(theta_x, theta_y, suzanne_pos, max_theta_x, max_theta_y);
+        let red = Math.min(r / max_red_disp, 1.0);
+        let green = Math.min(g / max_green_disp, 1.0);
+        let blue = Math.min(b / max_blue_disp, 1.0);
+        engine.mesh_objects[0].material.color.setRGB(red, green, blue);
 
         let R = se3_rotation_matrix(theta_x, theta_y, suzanne_pos[0], suzanne_pos[1], suzanne_pos[2]);
+
 
         let new_standard_points = standard_points.map(p => {
             return apply_se3(R, p);
